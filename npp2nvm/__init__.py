@@ -17,9 +17,18 @@ ALIGNMENT = 4096
 
 BYTE_SIZE = 1024 * 1024 * int(os.environ["NPP2NVM_SIZE"])
 
-reg = pmem.map_file(os.environ["NPP2NVM_PATH"], BYTE_SIZE, pmem.FILE_CREATE, 0o666)
 
 blocks_written = 0
+reg = None
+initialized = False
+
+
+def initialize():
+    global reg
+    global initialized
+    reg = pmem.map_file(os.environ["NPP2NVM_PATH"], BYTE_SIZE, pmem.FILE_CREATE, 0o666)
+    initialized = True
+
 
 def np_persist(np_array):
     """Persist a given numpy array.
@@ -32,14 +41,26 @@ def np_persist(np_array):
 
       a = np_persist(a)
     """
+
+    # The following is extremely ugly and anti-pythonic.
+    # I know.
+    # Consider yourself invited to propose a PR to improve all this mess :)
     global blocks_written
+    global initialized
+    global reg
+    
+    if not initialized:
+      initialize()
 
     b = np_array.tobytes()
 
     last_offset = blocks_written * ALIGNMENT
-    # Sanity check: both 1 byte and ALIGNMENT bytes should increment the blocks by 1
-    # and ALIGNMENT+1 should increment the blocks by 2
-    blocks_written += ((len(b) - 1) // ALIGNMENT + 1)
+    print("Persisting a numpy array at offset: %d" % last_offset)
+
+    # Rationale for the following formula: 
+    # sizes of both 1 byte and ALIGNMENT bytes should increment the blocks by 1
+    # a size of ALIGNMENT+1 bytes should increment the blocks by 2
+    blocks_written += (len(b) - 1) // ALIGNMENT + 1
     reg.write(b)
     reg.seek(blocks_written * ALIGNMENT)
 
