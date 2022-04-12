@@ -4,7 +4,7 @@ long_description = open("README.md").read()
 
 setup(
     name='npP2NVM',
-    version="0.2",
+    version="1.0rc1",
     install_requires=[
         "pynvm",
     ],
