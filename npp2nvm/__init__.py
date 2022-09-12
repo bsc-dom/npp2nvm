@@ -12,7 +12,7 @@ import os
 from nvm import pmem
 import numpy as np
 
-# Aligning data to 4k because I don't know any better
+# Aligning data to 4k (page size). Conservative version, it could be reduce if needed.
 ALIGNMENT = 4096
 
 BYTE_SIZE = 1024 * 1024 * int(os.environ["NPP2NVM_SIZE"])
@@ -42,9 +42,7 @@ def np_persist(np_array):
       a = np_persist(a)
     """
 
-    # The following is extremely ugly and anti-pythonic.
-    # I know.
-    # Consider yourself invited to propose a PR to improve all this mess :)
+    # Check if the following code can be written in a nicer way
     global blocks_written
     global initialized
     global reg
