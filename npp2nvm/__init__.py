@@ -9,6 +9,7 @@ This module expects the following environment variables defined:
   - NPP2NVM_SIZE The size (in MB) of the persistent space.
 """
 import os
+from threading import Lock
 from nvm import pmem
 import numpy as np
 
@@ -21,13 +22,20 @@ BYTE_SIZE = 1024 * 1024 * int(os.environ["NPP2NVM_SIZE"])
 blocks_written = 0
 reg = None
 initialized = False
-
+lock = Lock()
 
 def initialize():
     global reg
     global initialized
-    reg = pmem.map_file(os.environ["NPP2NVM_PATH"], BYTE_SIZE, pmem.FILE_CREATE, 0o666)
-    initialized = True
+
+    if initialized:
+       return
+
+    with lock:
+      if initialized:
+         return
+      reg = pmem.map_file(os.environ["NPP2NVM_PATH"], BYTE_SIZE, pmem.FILE_CREATE, 0o666)
+      initialized = True
 
 
 def np_persist(np_array):
@@ -47,20 +55,20 @@ def np_persist(np_array):
     global initialized
     global reg
     
-    if not initialized:
-      initialize()
+    initialize()
 
     b = np_array.tobytes()
 
-    last_offset = blocks_written * ALIGNMENT
-    print("Persisting a numpy array at offset: %d" % last_offset)
+    with lock:
+      last_offset = blocks_written * ALIGNMENT
+      print("Persisting a numpy array at offset: %d" % last_offset)
 
-    # Rationale for the following formula: 
-    # sizes of both 1 byte and ALIGNMENT bytes should increment the blocks by 1
-    # a size of ALIGNMENT+1 bytes should increment the blocks by 2
-    blocks_written += (len(b) - 1) // ALIGNMENT + 1
-    reg.write(b)
-    reg.seek(blocks_written * ALIGNMENT)
+      # Rationale for the following formula: 
+      # sizes of both 1 byte and ALIGNMENT bytes should increment the blocks by 1
+      # a size of ALIGNMENT+1 bytes should increment the blocks by 2
+      blocks_written += (len(b) - 1) // ALIGNMENT + 1
+      reg.write(b)
+      reg.seek(blocks_written * ALIGNMENT)
 
     # Get all the raw data in the buffer into a numpy array
     ret = np.frombuffer(reg.buffer, dtype=np_array.dtype, count=np_array.size, offset=last_offset)
